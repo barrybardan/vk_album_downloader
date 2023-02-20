@@ -64,10 +64,11 @@ def read_data():
     queries = []
     for url in lines:
         try:
-            queries.append(process_url(url))
+            queries.append(process_url(clear_url_after_question(url)))
         except ValueError as e:
             print(e)
     return l, p, queries
+
 
 
 def download_image(url, local_file_name):
@@ -75,12 +76,23 @@ def download_image(url, local_file_name):
     if not response.ok:
         print('bad response:', response)
         return
-    with open(local_file_name, 'wb') as file:
-        for chunk in response.iter_content(1024):
-            # if not chunk:
-            #     break
-            file.write(chunk)
+    # print(local_file_name)   
+    local_file_name = clear_url_after_question(local_file_name) 
+    # print(local_file_name)
+    try:     
+        with open(local_file_name, 'wb') as file:
+            for chunk in response.iter_content(1024):
+                # if not chunk:
+                #     break
+                file.write(chunk)
+    except:            
+        print(local_file_name)
     return
+
+def clear_url_after_question(url):
+    parts = url.split('?')
+    return parts[0] 
+
 
 
 def fix_illegal_album_title(title):
@@ -113,14 +125,27 @@ def main():
 
         try:
             album = api.photos.getAlbums(owner_id=o, album_ids=a)['items'][0]
-            title = album['title']
+            title = album['title'].strip()
             title = fix_illegal_album_title(title)
-            images_num = album['size']
-            photos = api.photos.get(owner_id=o, album_id=a, photo_sizes=1, count=images_num)['items']
+
+            photos = []
+
+            total_images = album['size']
+            current_offset = 0
+            number_to_fetch = 1000
+            while current_offset < total_images:
+                print(current_offset)
+                photos = photos + api.photos.get(owner_id=o, album_id=a, photo_sizes=1, count=number_to_fetch, offset=current_offset)['items']
+                current_offset = current_offset + number_to_fetch
+               
+#           if images_num > 1000:
+#                images_num = 1000
+#            photos = api.photos.get(owner_id=o, album_id=a, photo_sizes=1, count=images_num, offset=999)['items']
         except vk_api.exceptions.ApiError as e:
+            print('while getting albom:' + a)
             print('exception:')
             print(e)
-            return
+            continue
 
         album_path = path_to_downloaded_albums + '/' + title
         if not os.path.exists(album_path):
@@ -145,10 +170,11 @@ def main():
                         largest_image_src = size['url']
 
             extension = os.path.splitext(largest_image_src)[-1]
+            # print(album_path)
             download_image(largest_image_src, album_path + '/' +
                            str(p['id']) + extension)
             cnt += 1
-            print_progress(cnt, images_num)
+            print_progress(cnt, total_images)
         print()
 
 
